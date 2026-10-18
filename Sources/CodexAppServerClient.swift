@@ -185,7 +185,7 @@ final class CodexAppServerClient: CodexRateLimitClient {
             "clientInfo": [
                 "name": "codex-touchbar-pet",
                 "title": "Codex Touch Bar Pet",
-                "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.1"
+                "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.2"
             ],
             "capabilities": capabilities
         ]

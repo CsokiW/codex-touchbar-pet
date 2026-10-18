@@ -41,10 +41,10 @@ The current UI and permission messages are primarily Chinese. Local build and sy
 2. Unzip and move **Codex Touch Bar Pet.app** into `~/Applications` or `/Applications`.
 3. Open the companion, then Codex. First launch installs a user-level LaunchAgent to follow Codex's desktop lifecycle.
 
-For the 0.2.1 archives, put the downloaded files and checksum list in the same directory, then run:
+For the 0.2.2 archives, put the downloaded files and checksum list in the same directory, then run:
 
 ```bash
-shasum -a 256 -c Codex-Touch-Bar-Pet-0.2.1-SHA256SUMS.txt
+shasum -a 256 -c Codex-Touch-Bar-Pet-0.2.2-SHA256SUMS.txt
 ```
 
 The app is ad-hoc signed and not Apple-notarized. If macOS blocks it, inspect the release and use the per-app **Open Anyway** control in System Settings → Privacy & Security. Do not disable Gatekeeper globally.

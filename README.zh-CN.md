@@ -29,10 +29,10 @@
 
 从[下载页](https://github.com/CsokiW/codex-touchbar-pet/releases)获取匹配架构的压缩包，校验 SHA-256，解压后把 **Codex Touch Bar Pet.app** 放入应用程序目录并打开。首次打开会注册用户级自动启动项，之后随 Codex 启停。切到浏览器仍保留 Touch Bar；顶部菜单可以隐藏、重新加载、刷新或退出。
 
-校验 0.2.1 下载文件时，将压缩包和校验清单放在同一个目录，再运行：
+校验 0.2.2 下载文件时，将压缩包和校验清单放在同一个目录，再运行：
 
 ```bash
-shasum -a 256 -c Codex-Touch-Bar-Pet-0.2.1-SHA256SUMS.txt
+shasum -a 256 -c Codex-Touch-Bar-Pet-0.2.2-SHA256SUMS.txt
 ```
 
 手动退出只抑制当前 Codex 宿主会话的自动启动；重新打开 Codex 后恢复跟随，即使两次检查之间发生了快速重启。

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.2 — Menu-bar quota display fix
 
 - Size the menu-bar item to its content so weekly quota remains visible when percentage text grows.
 
