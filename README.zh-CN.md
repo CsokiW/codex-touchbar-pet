@@ -60,10 +60,10 @@ Touch Bar 不显示：退出其他 Touch Bar 工具，确认 Codex 正在运行�
 退出本工具，然后运行：
 
 ```bash
-launchctl bootout "gui/$(id -u)/com.github.CsokiW.CodexTouchBarPet.Launcher"
+launchctl bootout "gui/$(id -u)/com.github.csokiw.CodexTouchBarPet.Launcher"
 ```
 
-把 App 和 `~/Library/LaunchAgents/com.github.CsokiW.CodexTouchBarPet.Launcher.plist` 移到废纸篓；可一并清理 `~/Library/Application Support/CodexTouchBarPet/`。不要删除 `~/.codex`，那是 Codex 的登录和任务资料。
+把 App 和 `~/Library/LaunchAgents/com.github.csokiw.CodexTouchBarPet.Launcher.plist` 移到废纸篓；可一并清理 `~/Library/Application Support/CodexTouchBarPet/`。不要删除 `~/.codex`，那是 Codex 的登录和任务资料。
 
 ## 来源与许可
 

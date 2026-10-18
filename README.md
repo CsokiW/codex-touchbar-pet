@@ -88,10 +88,10 @@ The Touch Bar stays visible when switching to other apps while Codex is running.
 Quit the companion from its menu and unload its startup item:
 
 ```bash
-launchctl bootout "gui/$(id -u)/com.github.CsokiW.CodexTouchBarPet.Launcher"
+launchctl bootout "gui/$(id -u)/com.github.csokiw.CodexTouchBarPet.Launcher"
 ```
 
-Move the installed app and `~/Library/LaunchAgents/com.github.CsokiW.CodexTouchBarPet.Launcher.plist` to Trash. Optionally remove `~/Library/Application Support/CodexTouchBarPet/`, which holds the manual-quit marker. Do not delete `~/.codex`; it contains Codex's own login and task history.
+Move the installed app and `~/Library/LaunchAgents/com.github.csokiw.CodexTouchBarPet.Launcher.plist` to Trash. Optionally remove `~/Library/Application Support/CodexTouchBarPet/`, which holds the manual-quit marker. Do not delete `~/.codex`; it contains Codex's own login and task history.
 
 ## Credits and license
 
