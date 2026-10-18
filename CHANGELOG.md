@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Size the menu-bar item to its content so weekly quota remains visible when percentage text grows.
+
 ## 0.2.1 — Reliability fixes
 
 - Ignore cancelled or superseded speech authorization, recognition and insertion callbacks.

@@ -1,7 +1,7 @@
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate, RateLimitStoreDelegate {
-    private let statusItem = NSStatusBar.system.statusItem(withLength: 118)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let store = RateLimitStore()
     private let lifecycleMonitor = CodexLifecycleMonitor()
     private var touchBarVisibilityMenuItem: NSMenuItem?
