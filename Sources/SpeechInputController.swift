@@ -25,6 +25,26 @@ final class SpeechInputController {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var hasInstalledAudioTap = false
     private var errorResetWorkItem: DispatchWorkItem?
+    private var generation = 0
+    private let speechPermission: (@escaping (Bool) -> Void) -> Void
+    private let microphonePermission: (@escaping (Bool) -> Void) -> Void
+    private let textInserter: SpeechTextInserting
+    private let errorDisplayDuration: TimeInterval
+
+    init(
+        speechPermission: @escaping (@escaping (Bool) -> Void) -> Void = SpeechInputController.requestSpeechPermission,
+        microphonePermission: @escaping (@escaping (Bool) -> Void) -> Void = SpeechInputController.requestMicrophonePermission,
+        textInserter: SpeechTextInserting = CodexSpeechTextInserter(),
+        errorDisplayDuration: TimeInterval = 2.5,
+        initialTranscript: String = ""
+    ) {
+        self.speechPermission = speechPermission
+        self.microphonePermission = microphonePermission
+        self.textInserter = textInserter
+        self.errorDisplayDuration = errorDisplayDuration
+        self.transcript = initialTranscript
+        if !initialTranscript.isEmpty { self.state = .ready }
+    }
 
     private(set) var state: State = .idle {
         didSet {
@@ -57,6 +77,7 @@ final class SpeechInputController {
     }
 
     func stopRecording() {
+        generation += 1
         finishAudioCapture(cancelTask: false)
         if transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             state = .idle
@@ -66,6 +87,7 @@ final class SpeechInputController {
     }
 
     func clear() {
+        generation += 1
         errorResetWorkItem?.cancel()
         errorResetWorkItem = nil
         finishAudioCapture(cancelTask: true)
@@ -85,81 +107,49 @@ final class SpeechInputController {
             return
         }
 
-        guard AXIsProcessTrusted() else {
-            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            AXIsProcessTrustedWithOptions(options)
-            showTemporaryError("允许辅助功能后再点“输入”")
-            return
-        }
-
-        let targetApplication = NSWorkspace.shared.runningApplications.first { application in
-            let bundleIdentifier = application.bundleIdentifier?.lowercased() ?? ""
-            let name = application.localizedName?.lowercased() ?? ""
-            return bundleIdentifier == "com.openai.chat"
-                || bundleIdentifier == "com.openai.codex"
-                || name == "chatgpt"
-                || name == "codex"
-        }
-
-        guard let targetApplication else {
-            showTemporaryError("没有找到正在运行的 Codex")
-            return
-        }
-
-        targetApplication.activate(options: [.activateAllWindows])
+        generation += 1
+        let operation = generation
+        errorResetWorkItem?.cancel()
         state = .ready
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.postUnicodeText(text)
-        }
-    }
-
-    private func postUnicodeText(_ text: String) {
-        guard let eventSource = CGEventSource(stateID: .hidSystemState) else {
-            showTemporaryError("无法把文字输入到 Codex")
-            return
-        }
-
-        let utf16 = Array(text.utf16)
-        for start in stride(from: 0, to: utf16.count, by: 64) {
-            let end = min(start + 64, utf16.count)
-            var chunk = Array(utf16[start..<end])
-            guard let keyDown = CGEvent(keyboardEventSource: eventSource, virtualKey: 0, keyDown: true),
-                  let keyUp = CGEvent(keyboardEventSource: eventSource, virtualKey: 0, keyDown: false) else {
-                showTemporaryError("无法把文字输入到 Codex")
-                return
+        textInserter.insert(text, isCancelled: { [weak self] in
+            self?.generation != operation
+        }) { [weak self] result in
+            guard let self, self.generation == operation else { return }
+            switch result {
+            case .success:
+                self.transcript = ""
+                self.state = .idle
+            case .failure(let error):
+                self.showTemporaryError(error.localizedDescription)
             }
-            keyDown.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
-            keyUp.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: &chunk)
-            keyDown.post(tap: .cghidEventTap)
-            keyUp.post(tap: .cghidEventTap)
         }
-
-        transcript = ""
-        state = .idle
     }
 
     private func requestPermissionsAndStart() {
+        generation += 1
+        let operation = generation
+        errorResetWorkItem?.cancel()
         state = .requestingPermission
 
-        requestSpeechPermission { [weak self] speechAllowed in
-            guard let self else { return }
+        speechPermission { [weak self] speechAllowed in
+            guard let self, self.generation == operation, self.state == .requestingPermission else { return }
             guard speechAllowed else {
                 self.showTemporaryError("请允许语音识别权限")
                 return
             }
 
-            self.requestMicrophonePermission { [weak self] microphoneAllowed in
-                guard let self else { return }
+            self.microphonePermission { [weak self] microphoneAllowed in
+                guard let self, self.generation == operation, self.state == .requestingPermission else { return }
                 guard microphoneAllowed else {
                     self.showTemporaryError("请允许麦克风权限")
                     return
                 }
-                self.startRecording()
+                self.startRecording(operation: operation)
             }
         }
     }
 
-    private func requestSpeechPermission(completion: @escaping (Bool) -> Void) {
+    private static func requestSpeechPermission(completion: @escaping (Bool) -> Void) {
         switch SFSpeechRecognizer.authorizationStatus() {
         case .authorized:
             completion(true)
@@ -176,7 +166,7 @@ final class SpeechInputController {
         }
     }
 
-    private func requestMicrophonePermission(completion: @escaping (Bool) -> Void) {
+    private static func requestMicrophonePermission(completion: @escaping (Bool) -> Void) {
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized:
             completion(true)
@@ -193,7 +183,8 @@ final class SpeechInputController {
         }
     }
 
-    private func startRecording() {
+    private func startRecording(operation: Int) {
+        guard generation == operation, state == .requestingPermission else { return }
         guard let speechRecognizer, speechRecognizer.isAvailable else {
             showTemporaryError("语音识别服务暂不可用")
             return
@@ -221,7 +212,7 @@ final class SpeechInputController {
 
         recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self, self.generation == operation else { return }
 
                 if let result {
                     self.transcript = result.bestTranscription.formattedString
@@ -259,10 +250,11 @@ final class SpeechInputController {
             guard let self, case .error = self.state else {
                 return
             }
-            self.clear()
+            self.errorResetWorkItem = nil
+            self.state = self.transcript.isEmpty ? .idle : .ready
         }
         errorResetWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + errorDisplayDuration, execute: workItem)
     }
 
     private func finishAudioCapture(cancelTask: Bool) {

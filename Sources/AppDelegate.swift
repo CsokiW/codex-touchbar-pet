@@ -113,6 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, RateLimitStoreDelegate
             return
         }
 
+        button.image = NSImage(systemSymbolName: state.errorMessage == nil ? "bolt.horizontal.circle.fill" : "exclamationmark.circle.fill",
+                               accessibilityDescription: state.errorMessage == nil ? "Codex" : "额度刷新失败")
+        button.contentTintColor = state.errorMessage == nil ? nil : .systemOrange
         var titleParts: [String] = []
         var tooltipParts: [String] = []
 
@@ -131,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, RateLimitStoreDelegate
 
         if !titleParts.isEmpty {
             button.title = " \(titleParts.joined(separator: "  "))"
-            button.toolTip = "Codex 额度：\(tooltipParts.joined(separator: "，"))"
+            button.toolTip = "Codex 额度：\(tooltipParts.joined(separator: "，"))\n\(state.statusText)"
         } else if state.isRefreshing {
             button.title = " ..."
             button.toolTip = "Codex 额度：正在刷新"

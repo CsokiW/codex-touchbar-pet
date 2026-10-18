@@ -54,6 +54,9 @@ final class TouchBarRateLimitsView: NSView {
             weeklyRow.isHidden = false
             weeklyRow.updatePlaceholder(title: "周限额")
         }
+        for row in [fiveHourRow, weeklyRow] {
+            row.updateWarning(with: state)
+        }
     }
 
     func startPet() {
@@ -119,7 +122,7 @@ final class TouchBarRateLimitsView: NSView {
                 symbolName: "waveform.circle.fill",
                 color: .systemPurple,
                 accessibilityLabel: "开始语音输入",
-                toolTip: "开始中文语音输入；再次点击会直接输入当前文本框"
+                toolTip: "开始中文语音输入；再次点击会切回 Codex，核对文本框后输入"
             )
         case .requestingPermission:
             rows.isHidden = true
@@ -211,7 +214,7 @@ final class TouchBarRateLimitsView: NSView {
             symbolName: "waveform.circle.fill",
             color: .systemPurple,
             accessibilityLabel: "开始语音输入",
-            toolTip: "开始中文语音输入；再次点击会直接输入当前文本框"
+            toolTip: "开始中文语音输入；再次点击会切回 Codex，核对文本框后输入"
         )
 
         activityDot.wantsLayer = true
@@ -310,6 +313,20 @@ private final class TouchBarLimitRow: NSView {
         batteryBar.isDimmed = true
         remainingLabel.stringValue = "剩余 --"
         resetLabel.stringValue = "-- 重置"
+    }
+
+    func updateWarning(with state: RateLimitDisplayState) {
+        toolTip = state.statusText
+        remainingLabel.textColor = state.errorMessage == nil ? .labelColor : .systemOrange
+        resetLabel.textColor = state.errorMessage == nil ? .labelColor : .systemOrange
+        guard state.errorMessage != nil else { return }
+        batteryBar.isDimmed = true
+        if state.isStale {
+            remainingLabel.stringValue = "旧 " + remainingLabel.stringValue.replacingOccurrences(of: "剩余 ", with: "")
+            resetLabel.stringValue = state.lastUpdatedText
+        } else {
+            resetLabel.stringValue = "读取失败，请刷新"
+        }
     }
 
     private func configure() {

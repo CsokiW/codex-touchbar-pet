@@ -7,13 +7,20 @@ protocol RateLimitStoreDelegate: AnyObject {
 final class RateLimitStore {
     weak var delegate: RateLimitStoreDelegate?
 
-    private let client = CodexAppServerClient()
-    private let tokenUsageQueue = DispatchQueue(label: "CodexBar.LocalTokenUsageReader", qos: .utility)
+    private let client: CodexRateLimitClient
+    private let refreshInterval: TimeInterval
+    private let tokenUsageQueue = DispatchQueue(label: "CodexTouchBarPet.LocalTokenUsageReader", qos: .utility)
     private var timer: Timer?
     private var state = RateLimitDisplayState.initial
     private var refreshInFlight = false
     private var tokenUsageInFlight = false
     private var isStarted = false
+    private var generation = 0
+
+    init(client: CodexRateLimitClient = CodexAppServerClient(), refreshInterval: TimeInterval = 60) {
+        self.client = client
+        self.refreshInterval = refreshInterval
+    }
 
     func start() {
         guard !isStarted else {
@@ -26,61 +33,61 @@ final class RateLimitStore {
             self?.refresh()
         }
 
-        client.start { [weak self] result in
-            guard let self else {
-                return
-            }
-
-            switch result {
-            case .success:
-                self.refresh()
-                self.startTimer()
-            case .failure(let error):
-                self.publishError(error.localizedDescription)
-            }
-        }
+        startTimer()
+        refresh()
     }
 
     func stop() {
         isStarted = false
+        generation += 1
         refreshInFlight = false
         tokenUsageInFlight = false
         timer?.invalidate()
         timer = nil
+        state.isRefreshing = false
         client.stop()
     }
 
     func refresh() {
-        guard !refreshInFlight else {
+        guard isStarted, !refreshInFlight else {
             return
         }
 
         refreshInFlight = true
+        generation += 1
+        let requestGeneration = generation
         state.isRefreshing = true
-        state.errorMessage = nil
         publish()
 
-        client.readRateLimits { [weak self] result in
-            guard let self else {
-                return
-            }
-
-            self.refreshInFlight = false
-
+        // Ensure the backend is ready on every attempt, including after a failure.
+        client.start { [weak self] result in
+            guard let self, self.isStarted, self.generation == requestGeneration else { return }
             switch result {
-            case .success(let response):
-                self.apply(response)
+            case .success:
+                self.client.readRateLimits { [weak self] result in
+                    guard let self, self.isStarted, self.generation == requestGeneration else { return }
+                    self.finishRefresh(result)
+                }
             case .failure(let error):
-                self.state.isRefreshing = false
-                self.state.errorMessage = error.localizedDescription
-                self.publish()
+                self.finishRefresh(.failure(error))
             }
+        }
+    }
+
+    private func finishRefresh(_ result: Result<GetAccountRateLimitsResponse, Error>) {
+        refreshInFlight = false
+        switch result {
+        case .success(let response):
+            apply(response)
+        case .failure(let error):
+            client.stop()
+            publishError(error.localizedDescription)
         }
     }
 
     private func startTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             self?.refresh()
         }
     }

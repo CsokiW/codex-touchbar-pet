@@ -5,6 +5,7 @@ enum CodexAppServerError: LocalizedError {
     case malformedResponse
     case serverError(String)
     case missingResult
+    case requestTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -16,20 +17,31 @@ enum CodexAppServerError: LocalizedError {
             return message
         case .missingResult:
             return "Codex app-server response did not include a result."
+        case .requestTimedOut:
+            return "额度读取超时，请重试。"
         }
     }
 }
 
-final class CodexAppServerClient {
+protocol CodexRateLimitClient: AnyObject {
+    var onRateLimitsUpdated: (() -> Void)? { get set }
+    func start(completion: @escaping (Result<Void, Error>) -> Void)
+    func stop()
+    func readRateLimits(completion: @escaping (Result<GetAccountRateLimitsResponse, Error>) -> Void)
+}
+
+final class CodexAppServerClient: CodexRateLimitClient {
     typealias JSONDictionary = [String: Any]
 
-    private let codexCandidates = [
+    private static let defaultCandidates = [
         "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
         "/Applications/ChatGPT.app/Contents/Resources/codex",
         "/Applications/Codex.app/Contents/Resources/codex",
         "/Applications/GPT.app/Contents/Resources/codex"
     ].map(URL.init(fileURLWithPath:))
-    private let queue = DispatchQueue(label: "CodexBar.CodexAppServerClient")
+    private let codexCandidates: [URL]
+    private let requestTimeout: TimeInterval
+    private let queue = DispatchQueue(label: "CodexTouchBarPet.CodexAppServerClient")
 
     private var process: Process?
     private var inputPipe: Pipe?
@@ -38,12 +50,20 @@ final class CodexAppServerClient {
     private var outputBuffer = Data()
     private var nextRequestId = 1
     private var pendingResponses: [Int: (Result<Any, Error>) -> Void] = [:]
+    private var pendingTimeouts: [Int: DispatchWorkItem] = [:]
+    private var isInitialized = false
+    private var connectionGeneration = UUID()
+
+    init(codexCandidates: [URL]? = nil, requestTimeout: TimeInterval = 20) {
+        self.codexCandidates = codexCandidates ?? Self.defaultCandidates
+        self.requestTimeout = requestTimeout
+    }
 
     var onRateLimitsUpdated: (() -> Void)?
 
     func start(completion: @escaping (Result<Void, Error>) -> Void) {
         queue.async {
-            if self.process?.isRunning == true {
+            if self.process?.isRunning == true, self.isInitialized {
                 DispatchQueue.main.async {
                     completion(.success(()))
                 }
@@ -51,6 +71,7 @@ final class CodexAppServerClient {
             }
 
             do {
+                self.stopProcess(error: CodexAppServerError.processUnavailable)
                 try self.launchProcess()
                 self.initialize(completion: completion)
             } catch {
@@ -63,15 +84,24 @@ final class CodexAppServerClient {
 
     func stop() {
         queue.async {
-            self.outputPipe?.fileHandleForReading.readabilityHandler = nil
-            self.errorPipe?.fileHandleForReading.readabilityHandler = nil
-            self.inputPipe?.fileHandleForWriting.closeFile()
-            if self.process?.isRunning == true {
-                self.process?.terminate()
-            }
-            self.process = nil
-            self.pendingResponses.removeAll()
+            self.stopProcess(error: CodexAppServerError.processUnavailable)
         }
+    }
+
+    private func stopProcess(error: Error) {
+        connectionGeneration = UUID()
+        isInitialized = false
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        inputPipe?.fileHandleForWriting.closeFile()
+        process?.terminationHandler = nil
+        if process?.isRunning == true { process?.terminate() }
+        process = nil
+        inputPipe = nil
+        outputPipe = nil
+        errorPipe = nil
+        outputBuffer.removeAll()
+        failPendingResponses(error)
     }
 
     func readRateLimits(completion: @escaping (Result<GetAccountRateLimitsResponse, Error>) -> Void) {
@@ -105,6 +135,7 @@ final class CodexAppServerClient {
         let inputPipe = Pipe()
         let outputPipe = Pipe()
         let errorPipe = Pipe()
+        let generation = connectionGeneration
 
         process.executableURL = codexURL
         process.arguments = ["app-server", "--listen", "stdio://"]
@@ -118,6 +149,7 @@ final class CodexAppServerClient {
                 return
             }
             self?.queue.async {
+                guard self?.connectionGeneration == generation else { return }
                 self?.consumeOutput(data)
             }
         }
@@ -128,7 +160,8 @@ final class CodexAppServerClient {
 
         process.terminationHandler = { [weak self] _ in
             self?.queue.async {
-                self?.failPendingResponses(CodexAppServerError.processUnavailable)
+                guard self?.connectionGeneration == generation else { return }
+                self?.stopProcess(error: CodexAppServerError.processUnavailable)
             }
         }
 
@@ -141,6 +174,7 @@ final class CodexAppServerClient {
     }
 
     private func initialize(completion: @escaping (Result<Void, Error>) -> Void) {
+        let generation = connectionGeneration
         let capabilities: JSONDictionary = [
             "experimentalApi": true,
             "requestAttestation": false,
@@ -149,20 +183,29 @@ final class CodexAppServerClient {
 
         let params: JSONDictionary = [
             "clientInfo": [
-                "name": "touchbar-codex-token",
-                "title": "Touch Bar Codex Token",
-                "version": "0.1.0"
+                "name": "codex-touchbar-pet",
+                "title": "Codex Touch Bar Pet",
+                "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.1"
             ],
             "capabilities": capabilities
         ]
 
-        request(method: "initialize", params: params) { result in
-            DispatchQueue.main.async {
+        request(method: "initialize", params: params) { [weak self] result in
+            guard let self else { return }
+            self.queue.async {
+                guard self.connectionGeneration == generation else {
+                    DispatchQueue.main.async {
+                        if case .failure(let error) = result { completion(.failure(error)) }
+                        else { completion(.failure(CodexAppServerError.processUnavailable)) }
+                    }
+                    return
+                }
                 switch result {
                 case .success:
-                    completion(.success(()))
+                    self.isInitialized = true
+                    DispatchQueue.main.async { completion(.success(())) }
                 case .failure(let error):
-                    completion(.failure(error))
+                    DispatchQueue.main.async { completion(.failure(error)) }
                 }
             }
         }
@@ -184,6 +227,12 @@ final class CodexAppServerClient {
                     completion(result)
                 }
             }
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self, self.pendingResponses[requestId] != nil else { return }
+                self.stopProcess(error: CodexAppServerError.requestTimedOut)
+            }
+            self.pendingTimeouts[requestId] = timeout
+            self.queue.asyncAfter(deadline: .now() + self.requestTimeout, execute: timeout)
 
             var payload: JSONDictionary = [
                 "id": requestId,
@@ -197,9 +246,10 @@ final class CodexAppServerClient {
                 let data = try JSONSerialization.data(withJSONObject: payload)
                 var framed = data
                 framed.append(0x0A)
-                writer.write(framed)
+                try writer.write(contentsOf: framed)
             } catch {
                 self.pendingResponses.removeValue(forKey: requestId)
+                self.pendingTimeouts.removeValue(forKey: requestId)?.cancel()
                 DispatchQueue.main.async {
                     completion(.failure(error))
                 }
@@ -245,6 +295,7 @@ final class CodexAppServerClient {
         guard let completion = pendingResponses.removeValue(forKey: id) else {
             return
         }
+        pendingTimeouts.removeValue(forKey: id)?.cancel()
 
         if let error = message["error"] as? JSONDictionary {
             let message = error["message"] as? String ?? "Codex app-server returned an error."
@@ -274,8 +325,10 @@ final class CodexAppServerClient {
     }
 
     private func failPendingResponses(_ error: Error) {
-        let completions = pendingResponses.values
+        let completions = Array(pendingResponses.values)
         pendingResponses.removeAll()
+        pendingTimeouts.values.forEach { $0.cancel() }
+        pendingTimeouts.removeAll()
 
         completions.forEach { completion in
             completion(.failure(error))

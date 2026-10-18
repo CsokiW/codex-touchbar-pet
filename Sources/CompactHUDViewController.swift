@@ -164,7 +164,7 @@ final class CompactHUDViewController: NSViewController, NSTouchBarDelegate, Spee
         if SystemModalTouchBar.present(newBar) {
             presentedTouchBar = newBar
             missingSince = nil
-            NSLog("CodexBar restored Touch Bar presentation")
+            NSLog("CodexTouchBarPet restored Touch Bar presentation")
         }
     }
 

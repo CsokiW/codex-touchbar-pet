@@ -18,7 +18,7 @@ final class TouchBarPetView: NSView {
         translatesAutoresizingMaskIntoConstraints = false
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        if let url = Bundle.main.url(forResource: "TouchBarPet", withExtension: "webp") {
+        if let url = Bundle.main.url(forResource: "TouchBarPet", withExtension: "png") {
             loadSprite(at: url, name: petName)
         }
         refreshDescription()
@@ -190,7 +190,7 @@ final class CodexPetAssetLoader {
         let builtinIDs: Set<String> = ["codex", "bsod", "seedy", "hoots", "null-signal", "stacky", "dewey", "fireball", "rocky"]
         if builtinIDs.contains(id) {
             let key = "bundled-fallback:" + id
-            if loadedKey != key, let bundled = Bundle.main.url(forResource: "TouchBarPet", withExtension: "webp"),
+            if loadedKey != key, let bundled = Bundle.main.url(forResource: "TouchBarPet", withExtension: "png"),
                let bytes = try? Data(contentsOf: bundled) {
                 task?.cancel(); task = nil; pendingKey = nil
                 loadedKey = key

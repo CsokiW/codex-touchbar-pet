@@ -95,17 +95,24 @@ struct RateLimitDisplayState: Equatable {
 
     var statusText: String {
         if let errorMessage {
-            return errorMessage
+            return lastUpdated == nil ? errorMessage : "更新失败：\(errorMessage)；旧值，\(lastUpdatedText)"
         }
 
         if isRefreshing {
             return lastUpdated == nil ? "正在读取本机 Codex app-server..." : "正在刷新，保留上一组数据"
         }
 
-        guard let lastUpdated else {
+        guard lastUpdated != nil else {
             return "尚未读取额度"
         }
 
+        return lastUpdatedText
+    }
+
+    var isStale: Bool { errorMessage != nil && lastUpdated != nil }
+
+    var lastUpdatedText: String {
+        guard let lastUpdated else { return "尚未读取额度" }
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return "上次更新 \(formatter.string(from: lastUpdated))"

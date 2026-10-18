@@ -146,7 +146,7 @@ struct PetIPCFrames {
 final class CodexPetStateMonitor {
     var onActivity: ((CodexPetActivity) -> Void)?
     var onTasks: ((CodexTaskInfo) -> Void)?
-    private let queue = DispatchQueue(label: "CodexBar.pet.status", qos: .utility)
+    private let queue = DispatchQueue(label: "CodexTouchBarPet.pet.status", qos: .utility)
     private let lock = NSLock()
     private var generation = 0
     private var descriptor: Int32 = -1

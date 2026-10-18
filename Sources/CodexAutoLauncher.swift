@@ -15,7 +15,7 @@ enum CodexAutoLauncher {
             isDirectory: false
         )
         guard FileManager.default.fileExists(atPath: scriptURL.path) else {
-            NSLog("CodexBar auto launcher script is missing at %@", scriptURL.path)
+            NSLog("CodexTouchBarPet auto launcher script is missing at %@", scriptURL.path)
             return
         }
 
@@ -30,7 +30,7 @@ enum CodexAutoLauncher {
             try plist.write(to: plistURL, atomically: true, encoding: .utf8)
             bootstrapLaunchAgent(at: plistURL)
         } catch {
-            NSLog("CodexBar failed to install auto launcher: %@", String(describing: error))
+            NSLog("CodexTouchBarPet failed to install auto launcher: %@", String(describing: error))
         }
     }
 
@@ -39,15 +39,13 @@ enum CodexAutoLauncher {
     }
 
     static func markManualQuit() {
-        do {
-            try FileManager.default.createDirectory(
-                at: appSupportDirectory,
-                withIntermediateDirectories: true
-            )
-            try "manual quit\n".write(to: manualQuitLockURL, atomically: true, encoding: .utf8)
-        } catch {
-            NSLog("CodexBar failed to write manual quit lock: %@", String(describing: error))
-        }
+        guard let bundle = Bundle.main.bundleURLIfApp else { return }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [bundle.appendingPathComponent("Contents/Resources/codex-token-launcher.sh").path,
+                             bundle.path, "--mark-manual-quit"]
+        do { try process.run(); process.waitUntilExit() }
+        catch { NSLog("CodexTouchBarPet failed to write manual quit marker: %@", String(describing: error)) }
     }
 
     private static var launchAgentsDirectory: URL {

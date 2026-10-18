@@ -16,6 +16,7 @@ state.fiveHour = LimitMeter(title: "5 小时", shortTitle: "5h",
 state.weekly = LimitMeter(title: "周限额", shortTitle: "W",
     window: RateLimitWindow(usedPercent: 42, windowDurationMins: 10080, resetsAt: reset + 259200))
 state.lastUpdated = Date(timeIntervalSince1970: reset - 3600)
+if CommandLine.arguments.contains("--stale") { state.errorMessage = "示例：连接中断" }
 view.update(with: state)
 view.updateTaskInfo(CodexTaskInfo(activity: .running, activeCount: 1))
 view.layoutSubtreeIfNeeded()
@@ -26,5 +27,6 @@ view.cacheDisplay(in: view.bounds, to: bitmap)
 guard let png = bitmap.representation(using: .png, properties: [:]) else {
     fatalError("Cannot encode preview")
 }
-try png.write(to: URL(fileURLWithPath: "docs/touchbar-preview.png"))
+let outputPath = CommandLine.arguments.dropFirst().first { !$0.hasPrefix("--") } ?? "docs/touchbar-preview.png"
+try png.write(to: URL(fileURLWithPath: outputPath))
 print("Rendered synthetic native Touch Bar preview; no Codex data clients were started.")

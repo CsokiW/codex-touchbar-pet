@@ -9,10 +9,10 @@ Maintained by [CsokiW](https://github.com/CsokiW). Derived from [wjx8/CodexBar](
 ## What's different?
 
 - **A pet with a job.** The bundled character, **王臭吉 (Wang Chou Ji)**, animates for working, waiting, errors, and completion. Tap it to say hello.
-- **Real task state.** Reads local Codex Desktop runtime status instead of guessing from chat text. Aggregates up to 40 recent unarchived local tasks, not exclusively the selected task.
+- **Real task state.** Reads local Codex Desktop runtime status instead of guessing from chat text. Follows 40 recent unarchived local tasks and continues following older subscribed tasks that are still running or waiting, not exclusively the selected task.
 - **Quota at a glance.** Remaining 5-hour and weekly allowance, reset times, and reset credits when the account exposes them. Missing windows are hidden.
 - **One context button.** Refresh quota while Codex is frontmost; return to Codex from another app. Pending input and errors make it stand out.
-- **Chinese voice input.** Tap the microphone to record and tap again to insert recognized text into the focused field.
+- **Chinese voice input.** Tap the microphone to record and tap again to return to Codex and insert into a verified editable field. If the target cannot be verified, the text is retained for retry.
 - **Presentation recovery.** Restores the bar after wake or an unexpected system dismissal, respecting sleep, screen lock, and menu-based hiding.
 
 Quota and voice input originate in the upstream project. This version adds the pet, task-state tracking, completion animation, context button, and presentation recovery. The compact layout replaces upstream's yesterday/lifetime token columns with pet and task status.
@@ -33,11 +33,19 @@ The actual native view rendered with synthetic quota values, not a capture of a 
 
 **Compatibility:** Intel (`x86_64`) is the primary local build target. Apple Silicon can be built natively from source but is not claimed as tested. Release filenames identify their architecture.
 
+The current UI and permission messages are primarily Chinese. Local build and synthetic checks were run on an Intel MacBook Pro, macOS 26.6.2, with ChatGPT desktop 26.1013.40934 installed. This is not a cross-version or end-to-end voice-input compatibility guarantee.
+
 ## Install
 
 1. Download an archive matching your Mac from [Releases](https://github.com/CsokiW/codex-touchbar-pet/releases) and check its SHA-256 checksum.
 2. Unzip and move **Codex Touch Bar Pet.app** into `~/Applications` or `/Applications`.
 3. Open the companion, then Codex. First launch installs a user-level LaunchAgent to follow Codex's desktop lifecycle.
+
+For the 0.2.1 archives, put the downloaded files and checksum list in the same directory, then run:
+
+```bash
+shasum -a 256 -c Codex-Touch-Bar-Pet-0.2.1-SHA256SUMS.txt
+```
 
 The app is ad-hoc signed and not Apple-notarized. If macOS blocks it, inspect the release and use the per-app **Open Anyway** control in System Settings → Privacy & Security. Do not disable Gatekeeper globally.
 
@@ -55,7 +63,7 @@ bash scripts/build-app.sh
 open 'build/Codex Touch Bar Pet.app'
 ```
 
-The build uses Apple Swift/AppKit and system SQLite, without third-party runtime packages. It builds for the current Mac architecture. Tests use synthetic state and never open your Codex data. `bash scripts/package-dmg.sh` builds a DMG.
+The build uses Apple Swift/AppKit and system SQLite, without third-party runtime packages. It builds for the current Mac architecture. Tests use synthetic task/quota state, a local mock server, mocked speech permissions and insertion, and synthetic launcher sessions. They never open your Codex account data, record audio or type into real windows. They do not replace physical Touch Bar, Accessibility or speech-service testing. `bash scripts/package-dmg.sh` builds a DMG.
 
 ## Daily use
 
@@ -65,7 +73,7 @@ The Touch Bar stays visible when switching to other apps while Codex is running.
 
 **Task status:** waiting takes priority over running across local tasks. Celebration requires an observed transition from in-progress to completed. Reconnects and old completed tasks are not new successes. The app does not send approval decisions. Timing metadata is used internally for completion detection; this release's compact UI focuses on status rather than a separate elapsed-time counter.
 
-**Voice:** microphone and Speech Recognition permissions are requested when used; direct typing also needs Accessibility permission. Recognized text goes into the current focused field. Apple Speech may use Apple's services, depending on system availability; offline transcription is not guaranteed. Quota and pet display need no microphone permission.
+**Voice:** microphone and Speech Recognition permissions are requested when used; direct typing also needs Accessibility permission. The companion returns to a running Codex host and verifies its editable focus before inserting; it is not system-wide dictation. The current host is preferred, followed by standalone Codex if multiple hosts are running. Activation/focus failures keep the transcript: select the intended Codex text field and tap Input again. Insertion does not press Send. Apple Speech may use Apple's services, depending on system availability; offline transcription is not guaranteed. Quota and pet display need no microphone permission.
 
 ## Privacy
 
@@ -79,7 +87,7 @@ The Touch Bar stays visible when switching to other apps while Codex is running.
 
 **Blank Touch Bar:** quit competing Touch Bar apps, confirm Codex is running, then select **重新加载 Touch Bar** (Reload Touch Bar). If normal system controls are missing too, investigate the macOS Touch Bar service separately.
 
-**Quota shows `--`:** check the desktop and CLI login, then refresh. Available limits depend on the account plan. Failed refreshes retain the last available numbers.
+**Quota shows `--`:** check the desktop and CLI login, then refresh. Available limits depend on the account plan. Backend requests time out after 20 seconds. Refresh reconnects after a backend failure; the normal 60-second timer also retries. Failed refreshes retain the last available numbers, marked as old in orange with their last successful update time. The menu-bar warning icon and tooltip show the error. A successful update clears the warning.
 
 **Pet says 未连接 (offline):** quota may still work if the private desktop task-status interface has changed. IPC/database compatibility may need an update.
 
